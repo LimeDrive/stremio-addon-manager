@@ -151,7 +151,7 @@ function setupTMDB() {
         const tmdbAddon = addonsData.find(addon => addon.manifest.id === "tmdb-addon");
         if (!tmdbAddon) {
             alert("TMDB addon is not installed. Please install it first.");
-            return addonsData;
+            throw new Error("TMDB addon not installed");
         }
 
         return addonsData.map(addon => {
@@ -207,7 +207,9 @@ function fetchAndModifyAddons(token, modifyFunction, successMessage) {
     })
     .catch((error) => {
         console.error('Error:', error);
-        alert('Operation failed: ' + error.message);
+        if (error.message !== "TMDB addon not installed") {
+            alert('Operation failed: ' + error.message);
+        }
     });
 }
 </script>
