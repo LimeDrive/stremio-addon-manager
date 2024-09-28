@@ -6,7 +6,7 @@ import Authentication from './Authentication.vue'
 import DynamicForm from './DynamicForm.vue'
 
 const stremioAPIBase = "https://api.strem.io/api/"
-const dragging = false
+const dragging = ref(false)
 let stremioAuthKey = ref('');
 let addons = ref([])
 let loadAddonsButtonText = ref('Load Addons')
@@ -124,13 +124,100 @@ function saveManifestEdit(updatedManifest) {
         alert('Failed to update manifest');
     }
 }
+
+function unlockAddons() {
+    const token = stremioAuthKey.value;
+    if (!token) {
+        console.error('No auth key provided');
+        return;
+    }
+
+    fetchAndModifyAddons(token, (addonsData) => {
+        return addonsData.map(addon => ({
+            ...addon,
+            flags: { ...addon.flags, protected: false }
+        }));
+    }, 'Addons unlocked successfully!');
+}
+
+function setupTMDB() {
+    const token = stremioAuthKey.value;
+    if (!token) {
+        console.error('No auth key provided');
+        return;
+    }
+
+    fetchAndModifyAddons(token, (addonsData) => {
+        const tmdbAddon = addonsData.find(addon => addon.manifest.id === "tmdb-addon");
+        if (!tmdbAddon) {
+            alert("TMDB addon is not installed. Please install it first.");
+            return addonsData;
+        }
+
+        return addonsData.map(addon => {
+            if (addon.manifest.id === "tmdb-addon") {
+                return {
+                    ...addon,
+                    manifest: {
+                        ...addon.manifest,
+                        idPrefixes: ["tmdb:", "tt"]
+                    }
+                };
+            }
+            return addon;
+        });
+    }, 'TMDB addon configured successfully!');
+}
+
+function fetchAndModifyAddons(token, modifyFunction, successMessage) {
+    const requestData = {
+        type: "AddonCollectionGet",
+        authKey: token,
+        update: true
+    };
+
+    fetch('https://api.strem.io/api/addonCollectionGet', {
+        method: 'POST',
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data && data.result && data.result.addons) {
+            const modifiedAddons = modifyFunction(data.result.addons);
+            
+            const setData = {
+                type: "AddonCollectionSet",
+                authKey: token,
+                addons: modifiedAddons
+            };
+            
+            return fetch('https://api.strem.io/api/addonCollectionSet', {
+                method: 'POST',
+                body: JSON.stringify(setData)
+            });
+        } else {
+            throw new Error('Invalid data received');
+        }
+    })
+    .then(response => response.text())
+    .then(data => {
+        console.log('Success:', data);
+        alert(successMessage);
+        loadUserAddons(); // Reload addons after modification
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert('Operation failed: ' + error.message);
+    });
+}
 </script>
 
 <template>
     <section id="configure">
         <h2>Configure</h2>
         <form onsubmit="return false;">
-            <fieldset>
+            <fieldset id="form_step0">
+                <legend>Step 0: Connect</legend>
                 <Authentication :stremioAPIBase="stremioAPIBase" @auth-key="setAuthKey" />
             </fieldset>
             <fieldset id="form_step1">
@@ -140,7 +227,13 @@ function saveManifestEdit(updatedManifest) {
                 </button>
             </fieldset>
             <fieldset id="form_step2">
-                <legend>Step 2: Re-Order Addons</legend>
+                <legend>Step 2: Configure Addons</legend>
+                <button type="button" class="button secondary" @click="unlockAddons">Unlock Addons</button>
+                <button type="button" class="button secondary" @click="setupTMDB">Setup TMDB</button>
+                <p class="note">Note: TMDB addon must be installed and configured for proper metadata retrieval.</p>
+            </fieldset>
+            <fieldset id="form_step3">
+                <legend>Step 3: Re-Order and Modify Addons</legend>
                 <draggable :list="addons" item-key="transportUrl" class="sortable-list" ghost-class="ghost"
                     @start="dragging = true" @end="dragging = false">
                     <template #item="{ element, index }">
@@ -153,8 +246,8 @@ function saveManifestEdit(updatedManifest) {
                     </template>
                 </draggable>
             </fieldset>
-            <fieldset id="form_step3">
-                <legend>Step 3: Sync Addons</legend>
+            <fieldset id="form_step4">
+                <legend>Step 4: Sync to Stremio</legend>
                 <button type="button" class="button primary icon" @click="syncUserAddons">Sync to Stremio
                     <img src="https://icongr.am/feather/loader.svg?size=16&amp;color=ffffff" alt="icon">
                 </button>
@@ -222,5 +315,20 @@ button {
     font-size: 16px;
     cursor: pointer;
     border-radius: 5px;
+}
+
+.button.secondary {
+    background-color: #8d712b;
+    margin-right: 10px;
+}
+
+.button.secondary:hover {
+    background-color: #974242;
+}
+
+.note {
+    margin-top: 10px;
+    font-style: italic;
+    color: #888;
 }
 </style>

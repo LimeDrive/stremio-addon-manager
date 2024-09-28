@@ -47,7 +47,6 @@ function emitAuthKey() {
 </script>
 
 <template>
-    <legend>Step 0: Authenticate</legend>
     <p class="grouped">
         <input type="text" v-model="email" placeholder="Stremio E-mail">
         <input type="password" v-model="password" placeholder="Stremio Password">
